@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2c3e50">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BRIDGE Barcode Scanner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 15px;
+      font-size: 18px;
+      border: 2px solid #ccc;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    .result {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #006400;
+    }
+    .summary {
+      font-size: 16px;
+      font-weight: bold;
+      color: #111;
+      text-align: center;
+      margin: 10px 0 20px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 8px 16px;
+      background: #fafafa;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: center;
+    }
+    th {
+      background-color: #333;
+      color: white;
+    }
+    .not-found {
+      color: red;
+      font-weight: bold;
+    }
+    button {
+      margin: 20px auto;
+      display: block;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #444;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #222;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Сканирование Штрихкодов</h1>
+    <input type="text" id="barcodeInput" placeholder="Поднесите сканер и отсканируйте..." autofocus />
+    <div class="result" id="result"></div>
+    <div class="summary" id="totalCount"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Бренд</th>
+          <th>Цвет</th>
+          <th>Размер</th>
+          <th>Количество</th>
+        </tr>
+      </thead>
+      <tbody id="scanTable"></tbody>
+    </table>
+    <button onclick="downloadExcel()">Скачать как Excel</button>
+  </div>
+
+  <script>
+    const productMap = {
+      "2038816629366": { brand: "RA Success", color: "Черный", size: 36 }
+    };
+    const counts = {};
+    const input = document.getElementById("barcodeInput");
+    const result = document.getElementById("result");
+    const tableBody = document.getElementById("scanTable");
+
+    input.addEventListener("input", () => {
+      const raw = input.value.trim();
+      const code = raw.replace(/[^0-9]/g, "");
+      if (code.length < 13) return;
+      input.value = "";
+      if (productMap[code]) {
+        const { brand, color, size } = productMap[code];
+        const key = `${brand}_${color}_${size}`;
+        counts[key] = (counts[key] || 0) + 1;
+        result.textContent = `${brand}, ${color}, ${size} размер — ${counts[key]} шт.`;
+        renderTable();
+      } else {
+        result.innerHTML = `<span class='not-found'>Неизвестный штрихкод: ${code}</span>`;
+      }
+    });
+
+    function renderTable() {
+      tableBody.innerHTML = "";
+      let total = 0;
+      let totalBlack = 0;
+      let totalMatte = 0;
+      Object.entries(counts).forEach(([key, qty]) => {
+        const [brand, color, size] = key.split("_");
+        tableBody.innerHTML += `<tr><td>${brand}</td><td>${color}</td><td>${size}</td><td>${qty}</td></tr>`;
+        total += qty;
+        if (color === "Черный") totalBlack += qty;
+        if (color === "Матовый") totalMatte += qty;
+      });
+      document.getElementById("totalCount").innerHTML =
+        `Черный: ${totalBlack} шт. | Матовый: ${totalMatte} шт. | Всего: ${total} шт.`;
+    }
+
+    function downloadExcel() {
+      let rows = [["Бренд", "Цвет", "Размер", "Количество"]];
+      let totalBlack = 0, totalMatte = 0, grandTotal = 0;
+      Object.entries(counts).forEach(([key, qty]) => {
+        const [brand, color, size] = key.split("_");
+        rows.push([brand, color, size, qty]);
+        if (color === "Черный") totalBlack += qty;
+        if (color === "Матовый") totalMatte += qty;
+        grandTotal += qty;
+      });
+      rows.push([]);
+      rows.push(["ИТОГО", "Черный", "", totalBlack]);
+      rows.push(["ИТОГО", "Матовый", "", totalMatte]);
+      rows.push(["ИТОГО", "Всего", "", grandTotal]);
+
+      const csv = "\uFEFF" + rows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "отчет_штрихкодов.csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js');
+      });
+    }
+  </script>
+</body>
+</html>
